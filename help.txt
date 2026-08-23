@@ -1,0 +1,348 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from scapy.all import rdpcap, IP, TCP, UDP, ICMP, ARP, sniff
+import os
+from collections import Counter
+import re
+import threading
+import time
+import ipaddress
+
+app = Flask(__name__)
+CORS(app)
+
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {'pcap', 'pcapng'}
+
+# ============================================================
+# SAFE IP RANGES
+# ============================================================
+SAFE_RANGES = [
+    '192.168.0.0/16',
+    '10.0.0.0/8',
+    '172.16.0.0/12',
+    '127.0.0.0/8',
+    '8.8.8.0/24',
+    '1.1.1.0/24',
+    '142.250.0.0/16',
+    '142.251.0.0/16',
+    '172.217.0.0/16',
+    '216.58.0.0/16',
+    '74.125.0.0/16',
+    '173.194.0.0/16',
+    '216.239.0.0/16',
+    '151.101.0.0/16',
+    '146.75.0.0/16',
+    '104.16.0.0/13',
+    '23.206.0.0/15',
+    '192.178.0.0/16',
+    '35.186.0.0/16',
+    '35.190.0.0/16',
+    '13.204.0.0/14',
+    '54.191.0.0/16',
+    '52.168.0.0/13',
+    '40.99.0.0/16',
+    '34.160.0.0/12',
+    '203.192.0.0/16',
+    '57.0.0.0/8',
+    '76.0.0.0/8',
+    '18.0.0.0/8',         
+    '98.70.0.0/16',      
+]
+
+def is_safe_ip(ip):
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        for cidr in SAFE_RANGES:
+            if ip_obj in ipaddress.ip_network(cidr, strict=False):
+                return True
+    except:
+        pass
+    return False
+
+# ============================================================
+# THREAT DETECTOR
+# ============================================================
+class ThreatDetector:
+    def __init__(self):
+        self.suspicious_ips = {
+            '185.130.5.253': 'Known Malware C2',
+            '94.102.61.78': 'Ransomware Server',
+            '45.155.205.233': 'Phishing Domain',
+        }
+        self.dns_queries = []
+        self.arp_packets = []
+        self.ip_counts = Counter()
+        self.port_counts = Counter()
+        self.protocol_counts = Counter()
+
+    def analyze(self, packets):
+        threats = []
+        self.ip_counts.clear()
+        self.port_counts.clear()
+        self.protocol_counts.clear()
+        self.dns_queries = []
+        self.arp_packets = []
+
+        for packet in packets:
+            if 'src' in packet:
+                self.ip_counts[packet['src']] += 1
+            if 'dst' in packet:
+                self.ip_counts[packet['dst']] += 1
+
+            protocol = packet.get('protocol', 'Other')
+            self.protocol_counts[protocol] += 1
+
+            info = packet.get('info', '')
+            port_match = re.search(r'Port: (\d+)', info)
+            if port_match:
+                port = int(port_match.group(1))
+                self.port_counts[port] += 1
+
+            if 'DNS' in info:
+                self.dns_queries.append(packet)
+            if 'ARP' in info:
+                self.arp_packets.append(packet)
+
+        for ip, count in self.ip_counts.items():
+            if is_safe_ip(ip):
+                continue
+            if count > 100:
+                threats.append({
+                    'type': 'Potential DDoS Attack',
+                    'source': ip,
+                    'severity': 'Critical',
+                    'details': f'{count} packets from single source',
+                    'icon': ''
+                })
+            elif count > 50:
+                threats.append({
+                    'type': 'Unusual Traffic Pattern',
+                    'source': ip,
+                    'severity': 'High',
+                    'details': f'{count} packets from single source',
+                    'icon': ''
+                })
+
+        if len(self.arp_packets) > 10:
+            arp_sources = Counter()
+            for packet in self.arp_packets:
+                src = packet.get('src', 'Unknown')
+                arp_sources[src] += 1
+            for ip, count in arp_sources.items():
+                if count > 5 and not is_safe_ip(ip):
+                    threats.append({
+                        'type': 'ARP Spoofing Detected',
+                        'source': ip,
+                        'severity': 'Critical',
+                        'details': f'{count} ARP packets from same source',
+                        'icon': ''
+                    })
+
+        if len(self.dns_queries) > 20:
+            dns_domains = []
+            for packet in self.dns_queries:
+                info = packet.get('info', '')
+                domain_match = re.search(r'Domain: (\S+)', info)
+                if domain_match:
+                    dns_domains.append(domain_match.group(1))
+            domain_counts = Counter(dns_domains)
+            for domain, count in domain_counts.items():
+                if count > 10 and len(domain) > 30:
+                    threats.append({
+                        'type': 'DNS Poisoning Attempt',
+                        'source': domain,
+                        'severity': 'High',
+                        'details': f'{count} queries for {domain}',
+                        'icon': ''
+                    })
+
+        for port, count in self.port_counts.items():
+            if port in [22, 3389, 1433, 3306] and count > 20:
+                threats.append({
+                    'type': 'Brute Force Attack',
+                    'source': 'Unknown',
+                    'severity': 'Critical',
+                    'details': f'{count} attempts to port {port}',
+                    'icon': ''
+                })
+
+        for ip, count in self.ip_counts.items():
+            if is_safe_ip(ip):
+                continue
+            if count > 80:
+                threats.append({
+                    'type': 'Port Scan Detected',
+                    'source': ip,
+                    'severity': 'High',
+                    'details': f'{count} packets from {ip}',
+                    'icon': ''
+                })
+
+        for ip, description in self.suspicious_ips.items():
+            if ip in self.ip_counts:
+                threats.append({
+                    'type': 'Malicious IP Detected',
+                    'source': ip,
+                    'severity': 'Critical',
+                    'details': f'{description} - {self.ip_counts[ip]} packets',
+                    'icon': ''
+                })
+
+        total = sum(self.protocol_counts.values())
+        if total > 0:
+            tcp_pct = (self.protocol_counts.get('TCP', 0) / total) * 100
+            udp_pct = (self.protocol_counts.get('UDP', 0) / total) * 100
+            if tcp_pct > 95:
+                threats.append({
+                    'type': 'Protocol Anomaly',
+                    'source': 'N/A',
+                    'severity': 'Medium',
+                    'details': f'{tcp_pct:.1f}% TCP traffic',
+                    'icon': ''
+                })
+            if udp_pct > 80:
+                threats.append({
+                    'type': 'Potential DDoS',
+                    'source': 'N/A',
+                    'severity': 'High',
+                    'details': f'{udp_pct:.1f}% UDP traffic',
+                    'icon': ''
+                })
+
+        return threats
+
+# ============================================================
+# ROUTES
+# ============================================================
+@app.route('/')
+def home():
+    return "Packet Analyzer Backend is Running!"
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    print("Upload endpoint hit!")
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+    filename = file.filename
+    if '.' not in filename or filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS:
+        return jsonify({'error': 'Only .pcap and .pcapng files allowed'}), 400
+
+    filepath = os.path.join(UPLOAD_FOLDER, 'uploaded.pcap')
+    file.save(filepath)
+
+    packets = rdpcap(filepath)
+
+    packet_data = []
+    for packet in packets:
+        info = {'protocol': 'Other', 'info': ''}
+
+        if IP in packet:
+            info['src'] = packet[IP].src
+            info['dst'] = packet[IP].dst
+
+            if TCP in packet:
+                info['protocol'] = 'TCP'
+                info['info'] = f"Port: {packet[TCP].sport}->{packet[TCP].dport}"
+            elif UDP in packet:
+                info['protocol'] = 'UDP'
+                info['info'] = f"Port: {packet[UDP].sport}->{packet[UDP].dport}"
+            elif ICMP in packet:
+                info['protocol'] = 'ICMP'
+                info['info'] = "ICMP Packet"
+        elif ARP in packet:
+            info['protocol'] = 'ARP'
+            info['info'] = f"ARP: {packet[ARP].psrc} -> {packet[ARP].pdst}"
+
+        packet_data.append(info)
+
+    detector = ThreatDetector()
+    threats = detector.analyze(packet_data)
+
+    all_ips = []
+    for p in packet_data:
+        if p.get('src'):
+            all_ips.append(p['src'])
+        if p.get('dst'):
+            all_ips.append(p['dst'])
+    unique_ips = len(set(all_ips))
+
+    result = {
+        'total_packets': len(packet_data),
+        'packets': packet_data[:50],
+        'threats': threats,
+        'stats': {
+            'protocols': dict(detector.protocol_counts),
+            'unique_ips': unique_ips
+        }
+    }
+
+    os.remove(filepath)
+    return jsonify(result)
+
+# ============================================================
+# LIVE CAPTURE
+# ============================================================
+capture_active = False
+captured_packets = []
+capture_thread = None
+
+def packet_callback(packet):
+    global captured_packets
+    if not capture_active:
+        return
+    info = {'protocol': 'Other', 'info': ''}
+    if IP in packet:
+        info['src'] = packet[IP].src
+        info['dst'] = packet[IP].dst
+        if TCP in packet:
+            info['protocol'] = 'TCP'
+            info['info'] = f"Port: {packet[TCP].sport}->{packet[TCP].dport}"
+        elif UDP in packet:
+            info['protocol'] = 'UDP'
+            info['info'] = f"Port: {packet[UDP].sport}->{packet[UDP].dport}"
+        elif ICMP in packet:
+            info['protocol'] = 'ICMP'
+            info['info'] = "ICMP Packet"
+    elif ARP in packet:
+        info['protocol'] = 'ARP'
+        info['info'] = f"ARP: {packet[ARP].psrc} -> {packet[ARP].pdst}"
+    captured_packets.append(info)
+    if len(captured_packets) > 100:
+        captured_packets.pop(0)
+
+@app.route('/live/start', methods=['POST'])
+def start_live():
+    global capture_active, capture_thread, captured_packets
+    if capture_active:
+        return jsonify({'status': 'already running'})
+    capture_active = True
+    captured_packets = []
+    capture_thread = threading.Thread(target=sniff, kwargs={
+        'prn': packet_callback,
+        'store': False,
+        'timeout': 1
+    }, daemon=True)
+    capture_thread.start()
+    return jsonify({'status': 'started'})
+
+@app.route('/live/stop', methods=['POST'])
+def stop_live():
+    global capture_active
+    capture_active = False
+    return jsonify({'status': 'stopped'})
+
+@app.route('/live/packets', methods=['GET'])
+def get_live_packets():
+    return jsonify({
+        'packets': captured_packets[-20:],
+        'total': len(captured_packets)
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

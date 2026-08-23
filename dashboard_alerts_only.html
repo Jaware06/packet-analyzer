@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Packet Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0f1117;
+            color: #e4e6eb;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding: 16px 24px;
+            background: #1a1d27;
+            border-radius: 16px;
+            border: 1px solid #2a2d3a;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-left h1 { font-size: 1.6rem; font-weight: 600; color: #e4e6eb; }
+        .header-left .badge {
+            background: #2a2d3a;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #8892a8;
+            text-transform: uppercase;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 0.85rem;
+            color: #8892a8;
+        }
+        .header-right .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .upload-box {
+            background: #1a1d27;
+            padding: 24px 28px;
+            border-radius: 16px;
+            border: 1px solid #2a2d3a;
+            margin-bottom: 28px;
+        }
+        .upload-grid {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .upload-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .upload-left .icon-big { font-size: 2rem; }
+        .upload-left .info h3 { font-size: 1rem; font-weight: 600; color: #e4e6eb; }
+        .upload-left .info p { color: #8892a8; font-size: 0.85rem; margin-top: 2px; }
+        .upload-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .upload-actions input[type="file"] {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid #2a2d3a;
+            background: #0f1117;
+            color: #e4e6eb;
+            font-size: 0.85rem;
+            cursor: pointer;
+            max-width: 200px;
+        }
+        .upload-actions input[type="file"]::file-selector-button {
+            background: #2a2d3a;
+            color: #e4e6eb;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn {
+            padding: 8px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-primary { background: #3b82f6; color: #fff; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary { background: #2a2d3a; color: #e4e6eb; }
+        .btn-secondary:hover { background: #3a3d4a; }
+        .btn-danger { background: #dc2626; color: #fff; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-dark { background: #1f2230; color: #8892a8; border: 1px solid #2a2d3a; }
+        .btn-dark:hover { background: #2a2d3a; }
+
+        .divider { border: none; border-top: 1px solid #2a2d3a; margin: 20px 0 16px; }
+        .live-section {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px;
+            padding-top: 4px;
+        }
+        .live-section .label { color: #8892a8; font-size: 0.9rem; font-weight: 500; }
+        .live-section .badge-live {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: 1px solid rgba(220, 38, 38, 0.15);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: #1a1d27;
+            padding: 18px 16px;
+            border-radius: 14px;
+            border: 1px solid #2a2d3a;
+            text-align: center;
+            transition: 0.2s;
+        }
+        .stat-card:hover { border-color: #3b82f6; }
+        .stat-card .number { font-size: 2rem; font-weight: 700; color: #e4e6eb; }
+        .stat-card .label { color: #8892a8; font-size: 0.8rem; margin-top: 4px; }
+        .stat-card.danger .number { color: #dc2626; }
+        .stat-card.success .number { color: #22c55e; }
+        .stat-card.warning .number { color: #eab308; }
+
+        .section {
+            background: #1a1d27;
+            padding: 20px 24px;
+            border-radius: 14px;
+            margin-bottom: 24px;
+            border: 1px solid #2a2d3a;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        .section-header h2 { font-size: 1.1rem; font-weight: 600; color: #e4e6eb; }
+        .section-header .count-badge {
+            background: #2a2d3a;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: #8892a8;
+        }
+        .section-header .count-badge.danger {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+
+        .threat-item {
+            background: #0f1117;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border-left: 3px solid #dc2626;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .threat-item .info .title { font-weight: 600; font-size: 0.95rem; color: #e4e6eb; }
+        .threat-item .info .details { color: #8892a8; font-size: 0.8rem; margin-top: 2px; }
+        .badge {
+            padding: 2px 14px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-Critical { background: rgba(220, 38, 38, 0.15); color: #dc2626; }
+        .badge-High { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+        .badge-Medium { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+        .badge-Low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+        .device-item {
+            display: inline-block;
+            background: #0f1117;
+            padding: 6px 16px;
+            border-radius: 20px;
+            margin: 3px 6px 3px 0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            border: 1px solid #2a2d3a;
+        }
+        .device-item:hover { border-color: #3b82f6; }
+
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th {
+            background: #0f1117;
+            padding: 10px 14px;
+            text-align: left;
+            color: #8892a8;
+            font-weight: 600;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+        td { padding: 8px 14px; border-bottom: 1px solid #2a2d3a; color: #c8d0e0; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .status-normal { color: #22c55e; }
+        .status-suspicious { color: #eab308; }
+
+        .live-container {
+            max-height: 260px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid #2a2d3a;
+            background: #0f1117;
+        }
+        .live-packet {
+            padding: 6px 14px;
+            border-bottom: 1px solid #2a2d3a;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #c8d0e0;
+        }
+        .live-packet .highlight { color: #3b82f6; }
+
+        .empty-state { text-align: center; padding: 30px 20px; color: #8892a8; }
+        .empty-state .icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+        .loading { text-align: center; padding: 30px 20px; color: #3b82f6; }
+        .loading .spinner {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border: 2px solid #2a2d3a;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-bottom: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error-msg {
+            background: rgba(220, 38, 38, 0.05);
+            border: 1px solid rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+            padding: 16px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .live-container::-webkit-scrollbar { width: 4px; }
+        .live-container::-webkit-scrollbar-track { background: #0f1117; }
+        .live-container::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 10px; }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .header-left h1 { font-size: 1.2rem; }
+            .upload-grid { flex-direction: column; align-items: stretch; }
+            .upload-actions input[type="file"] { max-width: 100%; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .section { padding: 14px 16px; }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .btn { width: 100%; justify-content: center; }
+            .upload-actions input[type="file"] { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <header class="header">
+        <div class="header-left">
+            <h1>Packet Analyzer</h1>
+            <span class="badge">v2.0</span>
+        </div>
+        <div class="header-right">
+            <span><span class="dot"></span> Live</span>
+            <span id="clockDisplay">--:--:--</span>
+        </div>
+    </header>
+
+    <div class="upload-box">
+        <div class="upload-grid">
+            <div class="upload-left">
+                <span class="icon-big">&#128196;</span>
+                <div class="info">
+                    <h3>Upload PCAP / PCAPNG</h3>
+                    <p>Select a file to analyze network traffic</p>
+                </div>
+            </div>
+            <div class="upload-actions">
+                <input type="file" id="fileInput" accept=".pcap,.pcapng" />
+                <button class="btn btn-primary" id="analyzeBtn">Analyze</button>
+                <button class="btn btn-secondary" id="clearBtn">Clear</button>
+            </div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="live-section">
+            <span class="label">Live Capture</span>
+            <span class="badge-live">Inactive</span>
+            <button class="btn btn-danger" id="startLiveBtn">Start</button>
+            <button class="btn btn-dark" id="stopLiveBtn">Stop</button>
+            <span style="color:#8892a8;font-size:0.75rem;">Captures live network traffic</span>
+        </div>
+    </div>
+
+    <div id="results"></div>
+    <div id="liveSection"></div>
+
+</div>
+
+<script>
+    // ============================================
+    // DOM REFS
+    // ============================================
+    const fileInput = document.getElementById('fileInput');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const results = document.getElementById('results');
+    const liveSection = document.getElementById('liveSection');
+
+    // ============================================
+    // CLOCK
+    // ============================================
+    function updateClock() {
+        document.getElementById('clockDisplay').textContent = new Date().toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ============================================
+    // ANALYZE
+    // ============================================
+    analyzeBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        analyzeFile();
+    });
+
+    clearBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        results.innerHTML = '';
+        fileInput.value = '';
+        if (window.alerts) window.alerts.clearAll();
+    });
+
+    async function analyzeFile() {
+        const file = fileInput.files[0];
+        if (!file) {
+            results.innerHTML = '<div class="error-msg">Please select a PCAP file first.</div>';
+            return;
+        }
+
+        results.innerHTML = '<div class="loading"><div class="spinner"></div><div>Analyzing ' + file.name + '...</div><small style="color:#8892a8;">This may take a few seconds</small></div>';
+
+        var fd = new FormData();
+        fd.append('file', file);
+
+        try {
+            var resp = await fetch('http://127.0.0.1:5000/upload', { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error('Server returned ' + resp.status);
+            var data = await resp.json();
+
+            var threats = data.threats || [];
+
+            // Build UI
+            var html = '';
+
+            // Stats
+            var devices = new Set();
+            if (data.packets) {
+                data.packets.forEach(function(p) {
+                    if (p.src) devices.add(p.src);
+                    if (p.dst) devices.add(p.dst);
+                });
+            }
+            var protocols = new Set();
+            if (data.packets) {
+                data.packets.forEach(function(p) {
+                    if (p.protocol) protocols.add(p.protocol);
+                });
+            }
+
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><div class="number">' + (data.total_packets || 0) + '</div><div class="label">Total Packets</div></div>';
+            html += '<div class="stat-card success"><div class="number">' + devices.size + '</div><div class="label">Devices Found</div></div>';
+            html += '<div class="stat-card danger"><div class="number">' + threats.length + '</div><div class="label">Real Threats</div></div>';
+            html += '<div class="stat-card warning"><div class="number">' + protocols.size + '</div><div class="label">Protocols</div></div>';
+            html += '</div>';
+
+            // Threats
+            html += '<div class="section"><div class="section-header"><h2>Detected Threats</h2><span class="count-badge danger">' + threats.length + '</span></div>';
+            if (threats.length === 0) {
+                html += '<div class="empty-state"><div class="icon">&#10004;</div><p>No threats detected</p></div>';
+            } else {
+                threats.forEach(function(t) {
+                    var sev = t.severity || 'Low';
+                    html += '<div class="threat-item"><div class="info"><div class="title">' + (t.type || 'Unknown') + '</div><div class="details">Source: ' + (t.source || 'Unknown') + ' - ' + (t.details || '') + '</div></div><span class="badge badge-' + sev + '">' + sev + '</span></div>';
+                });
+            }
+            html += '</div>';
+
+            // Devices
+            html += '<div class="section"><div class="section-header"><h2>Devices on Network</h2><span class="count-badge">' + devices.size + '</span></div>';
+            if (devices.size === 0) {
+                html += '<div class="empty-state"><div class="icon">&#128228;</div><p>No devices found</p></div>';
+            } else {
+                html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+                var deviceList = Array.from(devices);
+                for (var i = 0; i < deviceList.length; i++) {
+                    var ip = deviceList[i];
+                    html += '<span class="device-item">' + ip + '</span>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Packets Table
+            var pkts = data.packets || [];
+            html += '<div class="section"><div class="section-header"><h2>Packet Details</h2><span class="count-badge">First ' + Math.min(30, pkts.length) + '</span></div>';
+            if (pkts.length === 0) {
+                html += '<div class="empty-state"><div class="icon">&#128455;</div><p>No packets found</p></div>';
+            } else {
+                html += '<div class="table-wrapper"><table><thead><tr><th>#</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Threat Level</th></tr></thead><tbody>';
+                for (var j = 0; j < Math.min(30, pkts.length); j++) {
+                    var p = pkts[j];
+                    var lvl = 'Normal';
+                    var cls = 'status-normal';
+                    html += '<tr><td>' + (j+1) + '</td><td>' + (p.src || '?') + '</td><td>' + (p.dst || '?') + '</td><td>' + (p.protocol || 'Other') + '</td><td class="' + cls + '">' + lvl + '</td></tr>';
+                }
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+
+            results.innerHTML = html;
+
+        } catch (err) {
+            results.innerHTML = '<div class="error-msg">Error: ' + err.message + '<br><br><small>Make sure Flask is running on port 5000</small><br><small>Run: python app.py</small></div>';
+        }
+    }
+
+    // ============================================
+    // LIVE CAPTURE
+    // ============================================
+    var liveInterval = null;
+
+    document.getElementById('startLiveBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        fetch('http://127.0.0.1:5000/live/start', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function() {
+                document.querySelector('.badge-live').textContent = 'Active';
+                document.querySelector('.badge-live').style.color = '#22c55e';
+                document.querySelector('.badge-live').style.borderColor = 'rgba(34,197,94,0.15)';
+                if (liveInterval) clearInterval(liveInterval);
+                liveInterval = setInterval(fetchLivePackets, 1500);
+            })
+            .catch(function(err) {
+                console.log('Error starting live capture:', err);
+            });
+    });
+
+    document.getElementById('stopLiveBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        fetch('http://127.0.0.1:5000/live/stop', { method: 'POST' })
+            .then(function() {
+                document.querySelector('.badge-live').textContent = 'Inactive';
+                document.querySelector('.badge-live').style.color = '#dc2626';
+                document.querySelector('.badge-live').style.borderColor = 'rgba(220,38,38,0.15)';
+                if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+            });
+    });
+
+    function fetchLivePackets() {
+        fetch('http://127.0.0.1:5000/live/packets')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var html = '<div class="section"><div class="section-header"><h2>Live Packets</h2><span class="count-badge">' + data.total + '</span></div>';
+                if (data.packets && data.packets.length > 0) {
+                    html += '<div class="live-container">';
+                    var packetsCopy = data.packets.slice().reverse();
+                    for (var i = 0; i < packetsCopy.length; i++) {
+                        var p = packetsCopy[i];
+                        html += '<div class="live-packet"><span class="highlight">' + (p.src || '?') + '</span> -> <span class="highlight">' + (p.dst || '?') + '</span> | ' + (p.protocol || 'Other') + '</div>';
+                    }
+                    html += '</div>';
+                } else {
+                    html += '<div class="empty-state"><div class="icon">&#128228;</div><p>Waiting for packets...</p></div>';
+                }
+                html += '</div>';
+                liveSection.innerHTML = html;
+            })
+            .catch(function() {});
+    }
+
+    console.log('Dashboard loaded.');
+</script>
+
+</body>
+</html>

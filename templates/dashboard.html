@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Packet Analyzer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+        <div class="nav-brand">
+            <!-- Sleek Security Shield Logo (No AI Symbols) -->
+            <svg class="brand-logo" viewBox="0 0 24 24">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.58 2.04-1.45 2.58l.95 2.87c.07.21-.08.43-.3.43h-4.4c-.22 0-.37-.22-.3-.43l.95-2.87C9.58 12.04 9 11.09 9 10c0-1.66 1.34-3 3-3z"/>
+            </svg>
+            <span class="brand-name">Packet Analyzer</span>
+            <span class="brand-tag">Premium</span>
+        </div>
+
+        <div class="nav-user">
+            <span class="user-greeting">Welcome, <strong id="navUsername">{{ username }}</strong></span>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-logout-icon" title="Sign Out">
+                <!-- Log out SVG -->
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path d="M16 13v-2H10V9h6V7l4 3-4 3zM9 17v-2H5V5h4V3H3v16h6v-2z" fill="currentColor"/>
+                </svg>
+                <span>Sign Out</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <nav class="sidebar-menu">
+                <button class="menu-item active" data-target="overview-tab">
+                    <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+                    <span>Overview</span>
+                </button>
+                <button class="menu-item" data-target="live-tab">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H7c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.04-.42 1.99-1.07 2.25z"/></svg>
+                    <span>Live Sniffing</span>
+                </button>
+                <button class="menu-item" data-target="history-tab" id="historyTabButton">
+                    <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    <span>History Log</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <span class="system-time" id="systemClock">--:--:--</span>
+            </div>
+        </aside>
+
+        <!-- Main Viewport Context -->
+        <main class="main-content">
+            <!-- Notification banner for alerts -->
+            <div id="alertContainer"></div>
+
+            <!-- ============================================ -->
+            <!-- TAB 1: OVERVIEW & PCAP ANALYSIS -->
+            <!-- ============================================ -->
+            <div id="overview-tab" class="tab-pane active">
+                <div class="view-header">
+                    <h2>Traffic Analysis Workspace</h2>
+                    <p>Upload files or drag packets to extract security summaries, threat indicators, and device logs.</p>
+                </div>
+
+                <!-- Dropzone Uploader Card -->
+                <div class="card upload-card" id="dropZone">
+                    <div class="upload-graphic">
+                        <svg class="upload-icon" viewBox="0 0 24 24">
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                        </svg>
+                    </div>
+                    <div class="upload-message">
+                        <h3>Select PCAP/PCAPNG File</h3>
+                        <p>Drag and drop your network trace files here, or click to browse</p>
+                    </div>
+                    <input type="file" id="fileSelector" accept=".pcap,.pcapng" style="display: none;">
+                    <div class="upload-filename" id="selectedFilename">No file chosen</div>
+                    <div class="upload-actions">
+                        <button class="btn btn-primary" id="btnUploadAnalyze" disabled>Run Deep Analysis</button>
+                        <button class="btn btn-secondary" id="btnResetUpload">Clear File</button>
+                    </div>
+                </div>
+
+                <!-- Output Container (Populated dynamically on upload success) -->
+                <div id="analysisResult" style="display: none;">
+                    <!-- Quick Statistics Grid -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon-wrapper protocol">
+                                <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                            </div>
+                            <div class="stat-data">
+                                <span class="stat-value" id="statTotalPackets">0</span>
+                                <span class="stat-label">Total Packets</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon-wrapper device">
+                                <svg viewBox="0 0 24 24"><path d="M4 6h16v10H4A2 2 0 0 1 2 14V8a2 2 0 0 1 2-2zm0 18h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2z"/></svg>
+                            </div>
+                            <div class="stat-data">
+                                <span class="stat-value" id="statUniqueIps">0</span>
+                                <span class="stat-label">Active Devices</span>
+                            </div>
+                        </div>
+                        <div class="stat-card threat-warning">
+                            <div class="stat-icon-wrapper threat">
+                                <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm1 14h-2v-2h2v2zm0-4h-2V8h2v4z"/></svg>
+                            </div>
+                            <div class="stat-data">
+                                <span class="stat-value" id="statThreatCount">0</span>
+                                <span class="stat-label">Security Alerts</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Split workspace details -->
+                    <div class="split-view">
+                        <!-- Left Panel: Detected Threats Feed -->
+                        <div class="panel panel-left">
+                            <div class="panel-header">
+                                <h3>Threat Feed</h3>
+                                <button class="btn btn-sm btn-dark" id="btnExportJSON">Export JSON</button>
+                                <button class="btn btn-sm btn-dark" id="btnExportCSV">Export CSV</button>
+                            </div>
+                            <div class="panel-content">
+                                <div class="threat-feed" id="threatFeedContainer">
+                                    <!-- Populated in script -->
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Right Panel: Devices Map & Protocols -->
+                        <div class="panel panel-right">
+                            <div class="panel-header">
+                                <h3>Subnet Distribution</h3>
+                            </div>
+                            <div class="panel-content">
+                                <h4 class="sub-title">Devices Identified</h4>
+                                <div class="tag-cloud" id="deviceTagContainer">
+                                    <!-- Populated in script -->
+                                </div>
+                                <h4 class="sub-title">Protocol Distribution</h4>
+                                <div class="protocol-chart-bar" id="protocolDistributionContainer">
+                                    <!-- Populated in script -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Packet Trace Detail Table -->
+                    <div class="card table-card">
+                        <div class="card-header">
+                            <h3>Packet Inspector</h3>
+                            <div class="card-actions">
+                                <input type="text" id="packetSearch" class="search-box" placeholder="Filter packets...">
+                                <select id="protocolFilter" class="filter-select">
+                                    <option value="ALL">All Protocols</option>
+                                    <option value="TCP">TCP</option>
+                                    <option value="UDP">UDP</option>
+                                    <option value="ICMP">ICMP</option>
+                                    <option value="ARP">ARP</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="inspector-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Source IP</th>
+                                        <th>Destination IP</th>
+                                        <th>Protocol</th>
+                                        <th>Length</th>
+                                        <th>Additional Info</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="packetTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- TAB 2: LIVE PACKET CAPTURE -->
+            <!-- ============================================ -->
+            <div id="live-tab" class="tab-pane">
+                <div class="view-header">
+                    <h2>Real-time Network Sniffer</h2>
+                    <p>Trigger live capture from physical system interfaces. Fallbacks to dynamic simulated packets if permissions or loopbacks are locked.</p>
+                </div>
+
+                <div class="card sniffer-controls-card">
+                    <div class="sniffer-meta">
+                        <div class="status-indicator">
+                            <span class="status-dot offline" id="liveStatusDot"></span>
+                            <span class="status-text" id="liveStatusText">Sniffer Inactive</span>
+                        </div>
+                        <div class="sniff-stats">
+                            <span>Captured: <strong id="livePacketCounter">0</strong> packets</span>
+                            <span id="mockWarning" class="warning-tag" style="display: none;">Mock Fallback Active</span>
+                        </div>
+                    </div>
+                    <div class="sniffer-actions">
+                        <button class="btn btn-danger" id="btnStartSniff">Start Sniffer</button>
+                        <button class="btn btn-dark" id="btnStopSniff" disabled>Stop & Save Session</button>
+                    </div>
+                </div>
+
+                <div class="split-view">
+                    <!-- Left: Live alerts triggered -->
+                    <div class="panel panel-left">
+                        <div class="panel-header">
+                            <h3>Live Threat Detection</h3>
+                        </div>
+                        <div class="panel-content">
+                            <div class="threat-feed" id="liveThreatContainer">
+                                <div class="empty-state">
+                                    <p>Start sniffer to observe security events</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right: Live packet scroll (Terminal format) -->
+                    <div class="panel panel-right">
+                        <div class="panel-header">
+                            <h3>Sniffer Terminal View</h3>
+                        </div>
+                        <div class="panel-content scrollable-terminal" id="liveTerminalContainer">
+                            <div class="terminal-line system-msg">SYS: Console ready. Trigger Start Sniffer to view logs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================ -->
+            <!-- TAB 3: USER HISTORY LOGS -->
+            <!-- ============================================ -->
+            <div id="history-tab" class="tab-pane">
+                <div class="view-header">
+                    <h2>Analysis Logs & History</h2>
+                    <p>Review and export past network captures and deep file uploads recorded for your profile.</p>
+                </div>
+
+                <div class="card history-card">
+                    <div class="table-container">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Source File / Target</th>
+                                    <th>Packets</th>
+                                    <th>Threat Alerts</th>
+                                    <th>Devices</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Main Logic Script Loader -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

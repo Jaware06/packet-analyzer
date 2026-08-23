@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+.env
+instance/
+
+# Packet captures
+*.pcap
+*.pcapng
+
+# Python cache
+.pytest_cache/
